@@ -590,7 +590,7 @@ class Instruction{
     }
 
     // 4) check reloading
-    if(keyArray[82] === 1 && this.players.bullet_count === 0) {
+    if(keyArray[82] === 1) {
       this.players.bullet_count = 30;
     }
     
