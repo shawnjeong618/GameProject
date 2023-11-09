@@ -108,7 +108,7 @@ class Shell{
       this.theta += this.vt;
 
       // decrement velocity (acceleration must be set outside this function when fired)
-      this.vel = (this.vel.mag() > 0.2) ? this.vel.sub(this.acc) : this.vel;
+      this.vel = (this.vel.mag() > 0.1) ? this.vel.sub(this.acc) : this.vel;
 
       // update location (velocity must be set outside this function)
       this.loc.add(this.vel);
@@ -469,6 +469,9 @@ class Instruction{
 
     // crosshair
     this.aim;
+
+    // state change variable (go back to main screen)
+    this.state_change = 0;
   }
 
   // initializer draw
@@ -525,13 +528,18 @@ class Instruction{
     textSize(24);
     textFont('Fantasy');
     fill(255, 50, 50);
-    text('W/S - Move up/down\nA/D - Move left/right\nMouse(Left) - Shoot\nR - Reload', 50, 4*height/5);
+    text('ESC - Back to main screen\nW/S - Move up/down\nA/D - Move left/right\nMouse(Left) - Shoot\nR - Reload', 50, 4*height/5);
     fill(0, 0, 255);
     text('Ammo\n'+this.players.bullet_count, width-150, 4*height/5);
   }
 
   // update function
   update() {
+    // 0) "ESC" Button to go back to main screen
+    if(keyArray[27] === 1) {
+      this.state_change = 1;
+    }
+
     // 1) update player movement
     // temporary velocity variable
     let temp_vel = new p5.Vector(0, 0);
@@ -579,8 +587,9 @@ class Instruction{
 
         // shoot bullets
         this.players.bullets[this.players.bullet_index].fired = 1;
-        this.players.bullets[this.players.bullet_index].loc = this.players.loc.copy().add(new p5.Vector((player_size/4)*cos(this.players.angle), (player_size/4)*sin(this.players.angle)+player_size/8));
+        this.players.bullets[this.players.bullet_index].loc = this.players.loc.copy().add(new p5.Vector((player_size/4)*cos(this.players.angle+QUARTER_PI/2), (player_size/4)*sin(this.players.angle+QUARTER_PI/2)));
         this.players.bullets[this.players.bullet_index].vel.setHeading(this.players.angle+HALF_PI+random(-0.5, 0.5));
+        this.players.bullets[this.players.bullet_index].vel.add(this.players.vel.copy().mult(0.5));
         this.players.bullets[this.players.bullet_index].acc = new p5.Vector(0.01, 0).setHeading(this.players.bullets[this.players.bullet_index].vel.heading());
         this.players.bullet_index = (this.players.bullet_index < this.players.bullets.length-1) ? this.players.bullet_index+1 : 0;
 
@@ -605,7 +614,7 @@ class Instruction{
 // Check Point #1
 class CP1{
   constructor() {
-    // game state variable
+    // game state variable (0: Main Screen, 1: Instruction, 2: Game)
     this.game_state = 0;
 
     // main screen and instruction instances
@@ -636,7 +645,8 @@ class CP1{
     switch(this.game_state) {
       case 0:
         if(this.main_screen.state_change === 1) {
-          this.game_state = 1;
+          this.game_state = 1;  // update current state to "Instruction"
+          this.main_screen.state_change = 0;  // reset flag variable
           this.instruction.initialize();
         }
         else{
@@ -644,7 +654,14 @@ class CP1{
         }
         break;
       case 1:
-        this.instruction.update();
+        if(this.instruction.state_change === 1) {
+          this.game_state = 0;  // update current state to "Main screen"
+          this.instruction.state_change = 0;  // reset flag variable
+          //this.main_screen.initialize();
+        }
+        else{
+          this.instruction.update();
+        }
         break;
     }
   }
