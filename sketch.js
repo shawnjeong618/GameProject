@@ -909,9 +909,20 @@ class Game1{
           if(this.enemies[i].hp <= 0) {
             continue;
           }
-
-          let hot_angle = atan2(player_size/4, p5.Vector.dist(this.player.loc, this.enemies[i].loc));
+          
+          // check if the enemy is in the line of fire
+          let target_dist = p5.Vector.dist(this.player.loc, this.enemies[i].loc);
+          let hot_angle = atan2(player_size/4, target_dist);
           if(abs(this.player.angle - this.enemies[i].loc.copy().sub(this.player.loc).heading()) < hot_angle) {
+            // check if any wall blocks the bullet
+            let blocked = false;
+            for(let j=0; j<this.walls.length; j++) {
+              // ignore walls that are further than the enemy
+              let wall_dist = p5.Vector.dist(this.player.loc, this.walls[j].loc);
+              if(target_dist < wall_dist) {
+                continue;
+              }
+            }
             this.enemies[i].hp--;
             this.enemies_hp[i].curr_hp--;
           }
