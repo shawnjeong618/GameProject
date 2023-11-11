@@ -299,7 +299,7 @@ class Enemy{
     this.hp = 3;
 
     // state variable (0: search, 1: shoot)
-    this.state = 1;
+    this.state = 0;
 
     // leg movement
     this.leg_index = 0;
