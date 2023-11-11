@@ -298,6 +298,9 @@ class Enemy{
     // health point variable
     this.hp = 3;
 
+    // state variable (0: search, 1: shoot)
+    this.state = 1;
+
     // leg movement
     this.leg_index = 0;
     this.leg_loc = new p5.Vector(0, 0);
@@ -811,6 +814,21 @@ class Game1{
     // define map size
     this.map_width = player_size*this.tilemap[0].length;
     this.map_height = player_size*this.tilemap.length;
+
+    // initialize total enemy count
+    this.enemy_count = this.enemies.length;
+  }
+
+  // reset
+  reset() {
+    // reset walls
+    this.walls = [];
+    this.player;
+    this.enemies = [];
+    this.aim;
+    this.player_hp;
+    this.enemies_hp = [];
+    this.state_change = 0;
   }
 
   // draw function
@@ -819,11 +837,10 @@ class Game1{
     translate(width/2-this.player.loc.x, height/2-this.player.loc.y);
     // draw players
     this.player.draw();
-    text(this.player.angle, this.player.loc.x, this.player.loc.y);
     // draw targets
     for(let i=0; i<this.enemies.length; i++) {
       this.enemies[i].draw();
-      //text(this.enemies[i].hp, this.enemies[i].loc.x, this.enemies[i].loc.y);
+      text(this.enemies[i].state, this.enemies[i].loc.x-player_size/3, this.enemies[i].loc.y-player_size/3);
     }
     // draw walls
     for(let i=0; i<this.walls.length; i++) {
@@ -845,10 +862,19 @@ class Game1{
     textFont('Fantasy');
     fill(0, 0, 255);
     text('Ammo\n'+this.player.bullet_count, width-150, 4*height/5);
+    // DEBUG
+    text('Enemy Count\n'+this.enemy_count, width-150, 3*height/5);
+    pop();
   }
 
   // update function
   update() {
+    // 0) check if game is over
+    if(this.enemy_count === 0) {
+      // player won
+      this.state_change = 2;
+    }
+
     // 1) update player movement
     // temporary velocity variable
     let temp_vel = new p5.Vector(0, 0);
@@ -903,7 +929,7 @@ class Game1{
         // update frame count
         this.player.frame_count = frameCount;
 
-        // check if 
+        // check if enemy is in the line of fire
         for(let i=0; i<this.enemies.length; i++) {
           // skip if the enemy is dead
           if(this.enemies[i].hp <= 0) {
@@ -918,13 +944,44 @@ class Game1{
             let blocked = false;
             for(let j=0; j<this.walls.length; j++) {
               // ignore walls that are further than the enemy
-              let wall_dist = p5.Vector.dist(this.player.loc, this.walls[j].loc);
+              let player_to_wall = this.walls[j].loc.copy().sub(this.player.loc);
+              let wall_dist = player_to_wall.mag();
               if(target_dist < wall_dist) {
                 continue;
               }
+
+              // get all the edges of the wall
+              var wall_edges = this.getWallEdges(j);
+              // get all the vector from player to edges
+              for(let k=0; k<wall_edges.length; k++) {
+                wall_edges[k] = wall_edges[k].sub(this.player.loc);
+              }
+              // calculate the angles from player to wall edges with respect to the center of the wall
+              var off_angle = [];
+              for(let k=0; k<wall_edges.length; k++) {
+                off_angle.push(player_to_wall.angleBetween(wall_edges[k]));
+              }
+              // get the min and max angle after sorting
+              off_angle.sort(function(a, b){return a - b});
+              let min_angle = off_angle[0];
+              let max_angle = off_angle[off_angle.length-1];
+              // check if the player's aim is within the blocking range
+              let mid_angle = player_to_wall.heading();
+              if(this.player.angle >= mid_angle+min_angle && this.player.angle <= mid_angle+max_angle) {
+                blocked = true;
+                break;
+              }
             }
-            this.enemies[i].hp--;
-            this.enemies_hp[i].curr_hp--;
+            
+            // decrease enemy health points if bullet is not blocked
+            if(blocked === false) {
+              // increase death count if enemy is about to die
+              if(this.enemies[i].hp === 1) {
+                this.enemy_count--;
+              }
+              this.enemies[i].hp--;
+              this.enemies_hp[i].curr_hp--;
+            }
           }
         }
 
@@ -949,6 +1006,114 @@ class Game1{
     // update player
     this.player.update();
 
+    // update enemies
+    for(let i=0; i<this.enemies.length; i++) {
+      switch(this.enemies[i].state) {
+        // searching state
+        case 0:
+          // check if the player is within enemies field of view
+          var target = this.player.loc.copy().sub(this.enemies[i].loc);
+          if(abs(target.heading()-this.enemies[i].angle) < QUARTER_PI) {
+            // check if there any walls blocking enemies view
+            let target_dist = target.mag();
+            let blocked = false;
+            for(let j=0; j<this.walls.length; j++) {
+              // ignore walls that are farther than the player
+              let enemy_to_wall = this.walls[j].loc.copy().sub(this.enemies[i].loc);
+              let wall_dist = enemy_to_wall.mag();
+              if(target_dist < wall_dist) {
+                continue;
+              }
+
+              // get all the edges of the wall
+              var wall_edges = this.getWallEdges(j);
+              // get all the vector from player to edges
+              for(let k=0; k<wall_edges.length; k++) {
+                wall_edges[k] = wall_edges[k].sub(this.enemies[i].loc);
+              }
+              // calculate the angles from player to wall edges with respect to the center of the wall
+              var off_angle = [];
+              for(let k=0; k<wall_edges.length; k++) {
+                off_angle.push(enemy_to_wall.angleBetween(wall_edges[k]));
+              }
+              // get the min and max angle after sorting
+              off_angle.sort(function(a, b){return a - b});
+              let min_angle = off_angle[0];
+              let max_angle = off_angle[off_angle.length-1];
+              // check if the player's aim is within the blocking range
+              let mid_angle = enemy_to_wall.heading();
+              if(this.enemies[i].angle >= mid_angle+min_angle && this.enemies[i].angle <= mid_angle+max_angle) {
+                blocked = true;
+                break;
+              }
+            }
+
+            // change state if enemy spots player
+            if(blocked === false) {
+              this.enemies[i].state = 1;
+            }
+            else{
+              // rotate clock wise
+              this.enemies[i].angle += QUARTER_PI/32;
+            }
+          }
+          else{
+            // rotate clock wise
+            this.enemies[i].angle += QUARTER_PI/32;
+          }
+          break;
+        // shooting state
+        case 1:
+          // check if the player is within valid firing angle
+          target = this.player.loc.copy().sub(this.enemies[i].loc);
+          let target_dist = target.mag();
+          let error_angle = atan2(player_size/4, target_dist);
+          if(abs(target.heading() - this.enemies[i].angle) < error_angle) {
+            let blocked = false;
+            for(let j=0; j<this.walls.length; j++) {
+              // ignore walls that are further than the enemy
+              let enemy_to_wall = this.walls[j].loc.copy().sub(this.enemies[i].loc);
+              let wall_dist = enemy_to_wall.mag();
+              if(target_dist < wall_dist) {
+                continue;
+              }
+
+              // get all the edges of the wall
+              var wall_edges = this.getWallEdges(j);
+              // get all the vector from player to edges
+              for(let k=0; k<wall_edges.length; k++) {
+                wall_edges[k] = wall_edges[k].sub(this.enemies[i].loc);
+              }
+              // calculate the angles from player to wall edges with respect to the center of the wall
+              var off_angle = [];
+              for(let k=0; k<wall_edges.length; k++) {
+                off_angle.push(enemy_to_wall.angleBetween(wall_edges[k]));
+              }
+              // get the min and max angle after sorting
+              off_angle.sort(function(a, b){return a - b});
+              let min_angle = off_angle[0];
+              let max_angle = off_angle[off_angle.length-1];
+              // check if the player's aim is within the blocking range
+              let mid_angle = enemy_to_wall.heading();
+              if(this.enemies[i].angle >= mid_angle+min_angle && this.enemies[i].angle <= mid_angle+max_angle) {
+                blocked = true;
+                break;
+              }
+            }
+
+            // change state if enemy is behind walls
+            if(blocked === true) {
+              this.enemies[i].state = 0;
+            }
+          }
+          // adjust direction
+          else{
+            //this.enemies[i].angle = (this.enemies[i].angle < target.heading()) ? this.enemies[i].angle + QUARTER_PI/8 : this.enemies[i].angle - QUARTER_PI/8;
+          }
+           break;
+      }
+    }
+
     // update hp bar location
     this.player_hp.loc = this.player.loc;
     for(let i=0; i<this.enemies_hp.length; i++) {
@@ -957,6 +1122,13 @@ class Game1{
 
     // update crosshair
     this.aim.update(mouseX, mouseY);
+  }
+
+  // helper function
+  // returns 4 edges of the wall
+  getWallEdges(index) {
+    let p0 = this.walls[index].loc.copy().sub(createVector(player_size/2, player_size/2));
+    return [p0, p0.copy().add(createVector(0, player_size)), p0.copy().add(createVector(player_size, 0)), p0.copy().add(createVector(player_size, player_size))];
   }
 }
 
@@ -1027,8 +1199,14 @@ class CP2{
         }
         break;
       case 2:
+        // game in progress
         if(this.game[this.curr_level].state_change === 0) {
           this.game[this.curr_level].update();
+        }
+        // game won
+        else if(this.game[this.curr_level].state_change === 2) {
+          this.game_state = 0;
+          this.game[this.curr_level].reset();
         }
         break;
     }
